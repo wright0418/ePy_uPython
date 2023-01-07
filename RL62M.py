@@ -34,20 +34,15 @@ V1.112 (2022.12.2)
     - add 接收 去除 空白b'\x00'
 V1.113 (2023.01.06)
     - add  init check connect state
-    - 改變使用 readline 接收 UART
-    - add scaning YLED on , remove 當沒有scan 到任何裝置 重新scan 
 """
 from utime import sleep_ms as delay
-from machine import LED
 import utime
 
 
 class GATT:
 
     def __init__(self, uart, role='PERIPHERAL'):
-        self._debug = False
-        self.scan_led = LED('ledy')
-        self.ROLE = ''
+        self.ROLE = role
         self.MODE = 'CMD'
         # self.mac = ''
         self.state = 'DISCONNECTED'
@@ -59,7 +54,7 @@ class GATT:
         self.FilterName = 'rl'
         self.ble = uart
         self.ble.deinit()
-        self.ble.init(115200, timeout=100, read_buf_len=1024)
+        self.ble.init(115200, timeout=100, read_buf_len=128)
         self._init_RL62M()
         self.ChangeRole(role)
 
@@ -91,27 +86,30 @@ class GATT:
             msg = self.WriteCMD_withResp('AT+EN_SYSMSG=1')
 
         msg = str(self.WriteCMD_withResp('AT+CONN_STATE'), 'utf-8').strip()
+        # print (bytearray(msg))
         if "DISCONNECTED OK" == msg:
             self.state = 'DISCONNECTED'
+            # print ('-')
         elif "CONNECTED OK" == msg:
             self.state = 'CONNECTED'
+            # print ('+')
         msg = self.ble.read(self.ble.any())   # Clear all UART Buffer
 
     def WriteCMD_withResp(self, atcmd, timeout=50):
         self.ChangeMode('CMD')
         self.ble.write(atcmd+'\r\n')
-        if self._debug:
-            print ('atcmd=',atcmd)
         prvMills = utime.ticks_ms()
+        resp = b""
         while (utime.ticks_ms()-prvMills) < timeout:
-            pass
-        resp = self.ble.readline()
-        if self._debug:
-            print ('resp=>',resp)
+            if self.ble.any():
+                resp = b"".join([resp, self.ble.read(self.ble.any())])
+                # print('rep-', atcmd, resp, utime.ticks_ms()-prvMills)
+            delay(10)
         return (resp)
 
     def ChangeMode(self, mode):
         if mode == self.MODE:
+
             return
         elif mode == 'CMD':
             delay(150)
@@ -127,13 +125,10 @@ class GATT:
                 delay(50)
             self.MODE = 'CMD'
         elif mode == 'DATA':
-            self.ble.write('AT+MODE_DATA\r\n')
-            msg = self.ble.readline()
-            if "OK" not in msg:
-                return
-            msg = self.ble.readline()
-            if 'SYS-MSG: DATA_MODE OK' not in msg:
-                return
+            msg = self.WriteCMD_withResp('AT+MODE_DATA')
+            while not 'SYS-MSG: DATA_MODE OK' in msg:
+                # print('change to data mode fail')
+                delay(100)
             self.MODE = 'DATA'
         else:
             pass
@@ -178,17 +173,14 @@ class GATT:
             else:
                 msg = self.WriteCMD_withResp(
                     'AT+ROLE=C', timeout=1500)  # 1.5sec for epy ble v1.03
-            if 'OK' not in msg:
-                if self._debug:
-                    print('Change Role fail ;', msg)
+            if 'READY OK' not in msg:
+                # print('Change Role fail ;', msg)
                 pass
-            _ = self.ble.read(self.ble.any())
 
             self.ROLE = role
             self.ChangeMode('DATA')
             return
 
-# rewrite the function for readline
     def ScanConnect(self, mac='', name_header='EPY_', filter_rssi=60):
         device = []
         if self.ROLE != 'CENTRAL':
@@ -198,20 +190,17 @@ class GATT:
                 'AT+SCAN_FILTER_RSSI={}'.format(filter_rssi)), 'utf-8')
             msg = str(self.WriteCMD_withResp(
                 'AT+SCAN_FILTER_NAME={}'.format(name_header)), 'utf-8')
-            self.scan_led.on()
-            msg = str(self.WriteCMD_withResp(
-                'AT+SCAN', timeout=6000), 'utf-8')
-            msg = str(self.ble.read(self.ble.any()),'utf-8')
-            msg = msg.replace('OK','')
-            msg = msg.split('\r\n')
-            for dev in msg:
-                sdev = dev.split(' ')
-                if len(sdev) == 5:
-                    device.append(sdev)
-            self.scan_led.off()
-            device.sort(key=lambda x: int(x[3]), reverse=True)
-            if self._debug:
-                print('deviceList=',device)
+            # print(msg)
+            while len(device) == 0:
+                msg = str(self.WriteCMD_withResp(
+                    'AT+SCAN', timeout=5000), 'utf-8')
+                msg = msg.split('\r\n')
+                for dev in msg:
+                    sdev = dev.split(' ')
+                    if len(sdev) == 5:
+                        device.append(sdev)
+            sorted(device, key=lambda x: int(x[3]), reverse=False)
+            # print(device)
             msg = self.WriteCMD_withResp(
                 'AT+CONN={}'.format(device[0][0]))
         else:
@@ -228,7 +217,7 @@ class GATT:
 
     def disconnect(self):
         msg = self.WriteCMD_withResp('AT+DISC')
-
+        #print ('disconn',msg)
         self.state = 'DISCONNECTED'
         for i in range(10):
             msg = self.RecvData()

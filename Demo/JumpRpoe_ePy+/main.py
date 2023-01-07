@@ -1,3 +1,7 @@
+'''
+V1.1
+- fixed BLE send times issues 
+'''
 from machine import accelerometer as axl
 from machine import display
 from machine import Pin, UART, LED
@@ -117,9 +121,10 @@ while True:
 
                 elif speed > 15:
                     Count_P = Count_N = speed = 0
-        sendData = 'send,{}\n'.format(Count_JumpRope)
-        BLE.SendData(sendData)
+            sendData = 'send,{}\n'.format(Count_JumpRope)
+            BLE.SendData(sendData)
     else:
+        Count_JumpRope = Count_P = Count_N = speed = 0
         ledr.on()
         ledg.off()
     # if _debug:
