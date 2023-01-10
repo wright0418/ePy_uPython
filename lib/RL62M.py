@@ -101,13 +101,13 @@ class GATT:
         self.ChangeMode('CMD')
         self.ble.write(atcmd+'\r\n')
         if self._debug:
-            print ('atcmd=',atcmd)
+            print('atcmd=', atcmd)
         prvMills = utime.ticks_ms()
         while (utime.ticks_ms()-prvMills) < timeout:
             pass
         resp = self.ble.readline()
         if self._debug:
-            print ('resp=>',resp)
+            print('resp=>', resp)
         return (resp)
 
     def ChangeMode(self, mode):
@@ -188,7 +188,6 @@ class GATT:
             self.ChangeMode('DATA')
             return
 
-# rewrite the function for readline
     def ScanConnect(self, mac='', name_header='EPY_', filter_rssi=60):
         device = []
         if self.ROLE != 'CENTRAL':
@@ -201,8 +200,8 @@ class GATT:
             self.scan_led.on()
             msg = str(self.WriteCMD_withResp(
                 'AT+SCAN', timeout=6000), 'utf-8')
-            msg = str(self.ble.read(self.ble.any()),'utf-8')
-            msg = msg.replace('OK','')
+            msg = str(self.ble.read(self.ble.any()), 'utf-8')
+            msg = msg.replace('OK', '')
             msg = msg.split('\r\n')
             for dev in msg:
                 sdev = dev.split(' ')
@@ -211,7 +210,7 @@ class GATT:
             self.scan_led.off()
             device.sort(key=lambda x: int(x[3]), reverse=True)
             if self._debug:
-                print('deviceList=',device)
+                print('deviceList=', device)
             msg = self.WriteCMD_withResp(
                 'AT+CONN={}'.format(device[0][0]))
         else:
