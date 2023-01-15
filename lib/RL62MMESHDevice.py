@@ -1,111 +1,135 @@
-import utime
 '''
-AT+MRG , Get Mesh Role 
-AT+DIS 0/1 , en/disable discovery mesh node
-AT+PBADVCON , enable provisioning channel
-AT+PROV , Provision the node
-AT+AKA , assign app_key and network_kep to node
-AT+MAKB, Set model 
-AT+
+Group ID -- Type
+C001 -- LIGHT
+C002 -- PLUGA
+C003 -- SWITCH
+C005 -- EPY
+C007 -- FAN
+
 '''
-NonReturnList = ['AT+NL', 'AT+CDG', 'AT+NSO']
+from utime import sleep_ms, ticks_ms, ticks_diff
+import ubinascii as binascii
 
 
-class MeshProv:
+class MeshDevice:
 
     def __init__(self, uart):
 
         self.ble = uart
-        self.ROLE = self.WriteCMD_withResp('AT+MRG')[0]
-        self.bind_addr = []
+        self.got_flag = False
+        self.got_msg = ''
+        self.mac_addr = self.MyMac_Addr()
 
     def __del__(self):
         self.ble.deinit()
 
-    def WriteCMD_withResp(self, atcmd, timeout=300):
-        self.ble.read(self.ble.any())
-        self.ble.write(atcmd+'\r\n')
-        utime.sleep_ms(timeout)
-        if atcmd in NonReturnList:
-            return ('')
-        msg = ''
-        while 'ERROR' in msg or len(msg) == 0:
-            msg = str(self.ble.readline(), 'utf-8').strip()
-            utime.sleep_ms(300)
-        if 'SUCCESS' in msg:
-            msg = msg.split(' ')
-            del msg[0:2]
-            return (msg)
+    def uart_recv(self):
+        timeout = 50
+        pre_ticks = ticks_ms()
+        while True:
+            if self.ble.any():
+                msg = str(self.ble.readline(), 'utf-8').strip().split(' ')
+                type = msg[0]
+                other = msg[1:]
+                print(type, other)
+                if 'MDTS-MSG' in type or 'MDTGP-MSG' in type:
+                    if len(msg) > 2:
+                        self.got_flag = True
+                        self.got_msg = (msg[1], msg[3])
+                        return
+                return type, other
+            elif ticks_diff(ticks_ms(), pre_ticks) > timeout:
+                return
+            sleep_ms(10)
 
-    def ScanNonProv(self, timeout=5000):
+    def WriteCMD_withResp(self, atcmd_):
+        _ = self.ble.write(atcmd_+'\r\n')
+        type, msg = self.uart_recv()
+        print(atcmd_)
+        return type, msg
 
-        NonProvDevice = {}
-        self.WriteCMD_withResp('AT+DIS 1')
-        msg = ''
-        prvMills = utime.ticks_ms()
-        print('wait 5sec for scan')
-        while len(NonProvDevice) < 5 and (utime.ticks_ms()-prvMills) < timeout:
-            msg = str(self.ble.readline(), 'utf-8').strip()
-            if len(msg) > 0:
-                print(msg)
-                msg = msg.split(' ')
-                NonProvDevice[msg[1]] = msg[3]
+    def Re_try_WriteCMD(self, atcmd):
+        times = 10
+        while times > 0:
+            type, m = self.WriteCMD_withResp(atcmd)
+            print('===', type, m)
+            if m[0] == "ERROR":
+                times -= 1
+                sleep_ms(1000)
+                continue
+            else:
+                return m[0]  # SUCCESS
 
-            utime.sleep_ms(100)
-        self.WriteCMD_withResp('AT+DIS 0')
-        return (NonProvDevice)
+    def NodeReset(self):
+        self.WriteCMD_withResp('AT+NR')
 
-    def bind_all(self):
-
-        NonProvDevice = self.ScanNonProv()
-        if len(NonProvDevice) > 0:
-            for key, value in NonProvDevice.items():
-                self.WriteCMD_withResp('AT+PBADVCON {}'.format(value))
-                id = self.WriteCMD_withResp('AT+PROV')[0]
-                self.bind_addr.append(id)
-                print('bind-{}'.format(id))
-                self.WriteCMD_withResp(
-                    'AT+AKA {} 0 0'.format(id,), timeout=500)
-                self.WriteCMD_withResp(
-                    'AT+MAKB {} 0 0x4005d 0'.format(id,), timeout=500)
-                print('bind-OK')
-
-    def DisBind(self, id='00'):
-        if id == '00':
-            self.WriteCMD_withResp('AT+NR')
-        else:
-            self.WriteCMD_withResp('AT+NR {}'.format(id))
-
-    def GetDeviceList(self):
-        DeviceList = []
-        self.WriteCMD_withResp('AT+NL')
-        msg = str(self.ble.readline(), 'utf-8').strip()
-        while msg != '':
-            DeviceList.append(msg.split(' ')[2])
-            msg = str(self.ble.readline(), 'utf-8').strip()
-        return (DeviceList)
+    def MyMac_Addr(self):
+        _, msg = self.WriteCMD_withResp('AT+ADDR')
+        print(msg)
+        return msg[0][-4:]
 
     def SendData_Light(self, dst, C=0, W=0, R=0, G=0, B=0):
-        msg = self.WriteCMD_withResp(
-            'AT+MDTS {} 0 0 0 0x87010005{:02x}{:02x}{:02x}{:02x}{:02x}'.format(dst, C, W, R, G, B))
+        msg = self.Re_try_WriteCMD(
+            'AT+MDTS 0 0x87F000{}{}070100{:02X}{:02X}{:02X}{:02X}{:02X}'.format(self.mac_addr, dst, C, W, R, G, B))
 
     def SendData_Switch(self, dst, on_off):
-        msg = self.WriteCMD_withResp(
-            'AT+MDTS {} 0 0 0 0x87020001{:02x}'.format(dst, on_off))
+        msg = self.Re_try_WriteCMD(
+            'AT+MDTS 0 0x87F000{}{}030200{:02X}'.format(self.mac_addr, dst, on_off))
 
-    def SetNode_Group(self, dst, group):
-        '''需要增加查詢 Group 有無此Node'''
-        msg = self.WriteCMD_withResp(
-            'AT+MSAA {} 0 0x4005D {}'.format(dst, group), timeout=700)
+    def SendData_Fan(self, dst, speed=None, OnOff=None, timer=None, swing=None, mode=None):
+        if speed and speed <= 24:
+            msg = self.Re_try_WriteCMD(
+                'AT+MDTS 0 0x87F000{}{}04040007{:02X}'.format(self.mac_addr, dst, speed))
+        if timer and timer <= 8:
+            msg = self.Re_try_WriteCMD(
+                'AT+MDTS 0 0x87F000{}{}04040006{:02X}'.format(self.mac_addr, dst, timer))
+        if swing in (0, 1, True, False):
+            msg = self.Re_try_WriteCMD(
+                'AT+MDTS 0 0x87F000{}{}04040005{:02X}'.format(self.mac_addr, dst, swing))
+        if mode:
+            msg = self.Re_try_WriteCMD(
+                'AT+MDTS 0 0x87F000{}{}04040005{:02X}'.format(self.mac_addr, dst, swing))
+        if OnOff in (0, 1, True, False):
+            msg = self.Re_try_WriteCMD(
+                'AT+MDTS 0 0x87F000{}{}04040001{:02X}'.format(self.mac_addr, dst, OnOff))
 
-    def DelNode_Group(self, dst, group):
-        '''需要增加查詢 Group 有無此Node'''
-        msg = self.WriteCMD_withResp(
-            'AT+MSAD {} 0 0x4005D {}'.format(dst, group), timeout=700)
-
-    def SetNodePublish(self, dst, publish_addr):
-        pass
+    def SendData_EPY(self, dst, send_msg):
+        if len(send_msg) > 14:
+            send_msg = send_msg[:14]
+        length = len(send_msg)
+        send_data = str(binascii.hexlify(send_msg), 'utf-8')
+        msg = self.Re_try_WriteCMD(
+            'AT+MDTS 0 0x87F000{}{}{:02X}{}'.format(self.mac_addr, dst, length, send_data))
+        return (msg)
 
     def ReadMeshMsg(self):
-        msg = str(self.ble.readline().strip(), 'utf-8')
-        return(msg)
+        self.uart_recv()
+        if self.got_flag:
+            self.got_flag = False
+            source = self.got_msg[0]
+            msg = self.got_msg[1]
+            char_data = str(binascii.unhexlify(msg),'utf-8')
+            return source, char_data
+        else:
+            return None,None
+
+
+if __name__ == '__main__':
+    from machine import UART
+    import gc
+    try:
+        uart = UART(0, 115200, timeout=20)
+    except:
+        uart.deinit()
+        uart = UART(0, 115200, timeout=20)
+    MD = MeshDevice(uart)
+    MD.SendData_Light('C001', 0, 0, 255, 255, 0)
+    MD.SendData_Switch('C002', 1)  # Off
+    MD.SendData_Fan('C007', OnOff=1, swing=1, speed=3, timer=2)
+    MD.SendData_EPY('C005', "I am ePy01")
+
+    while True:
+        source,msg = MD.ReadMeshMsg()
+        if msg:
+            print('{} say {}'.format(source,msg))
+        sleep_ms(1)
