@@ -86,6 +86,7 @@ while True:
                 display.on()
                 display.scroll(Count_JumpRope, delay=300, wait=False)
                 music.play(['B:1', 'A', 'F', 'E', 'D', 'C'], wait=True)
+                Count_JumpRope = Count_P = Count_N = speed = 0
 
             elif recv_msg[1] == 'disc':
                 game_state = 'STOP'

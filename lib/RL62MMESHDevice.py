@@ -108,10 +108,10 @@ class MeshDevice:
             self.got_flag = False
             source = self.got_msg[0]
             msg = self.got_msg[1]
-            char_data = str(binascii.unhexlify(msg),'utf-8')
+            char_data = str(binascii.unhexlify(msg), 'utf-8')
             return source, char_data
         else:
-            return None,None
+            return None, None
 
 
 if __name__ == '__main__':
@@ -129,7 +129,12 @@ if __name__ == '__main__':
     MD.SendData_EPY('C005', "I am ePy01")
 
     while True:
-        source,msg = MD.ReadMeshMsg()
-        if msg:
-            print('{} say {}'.format(source,msg))
-        sleep_ms(1)
+        for i in range(0, 255):
+            MD.SendData_Light('C001', 0, 0, 0, i, 0)
+            sleep_ms(1000)
+
+    # while True:
+    #     source,msg = MD.ReadMeshMsg()
+    #     if msg:
+    #         print('{} say {}'.format(source,msg))
+    #     sleep_ms(1)
