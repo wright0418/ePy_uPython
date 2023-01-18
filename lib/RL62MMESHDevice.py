@@ -28,18 +28,22 @@ class MeshDevice:
         pre_ticks = ticks_ms()
         while True:
             if self.ble.any():
-                msg = str(self.ble.readline(), 'utf-8').strip().split(' ')
-                type = msg[0]
-                other = msg[1:]
-                print(type, other)
-                if 'MDTS-MSG' in type or 'MDTGP-MSG' in type:
-                    if len(msg) > 2:
-                        self.got_flag = True
-                        self.got_msg = (msg[1], msg[3])
-                        return
-                return type, other
+                try:
+                    msg = str(self.ble.readline(), 'utf-8').strip().split(' ')
+                    type = msg[0]
+                    other = msg[1:]
+                    print(type, other)
+                    if 'MDTS-MSG' in type or 'MDTGP-MSG' in type:
+                        if len(msg) > 2:
+                            self.got_flag = True
+                            self.got_msg = (msg[1], msg[3])
+                            return None, None
+                    return type, other
+                except:
+                    return None, None
+
             elif ticks_diff(ticks_ms(), pre_ticks) > timeout:
-                return
+                return None, None
             sleep_ms(10)
 
     def WriteCMD_withResp(self, atcmd_):
@@ -53,12 +57,18 @@ class MeshDevice:
         while times > 0:
             type, m = self.WriteCMD_withResp(atcmd)
             print('===', type, m)
-            if m[0] == "ERROR":
+            try:
+                if type:
+                    if m[0] == "ERROR":
+                        times -= 1
+                        sleep_ms(1000)
+                        continue
+                    else:
+                        return m[0]  # SUCCESS
+            except:
                 times -= 1
                 sleep_ms(1000)
                 continue
-            else:
-                return m[0]  # SUCCESS
 
     def NodeReset(self):
         self.WriteCMD_withResp('AT+NR')
@@ -77,21 +87,23 @@ class MeshDevice:
             'AT+MDTS 0 0x87F000{}{}030200{:02X}'.format(self.mac_addr, dst, on_off))
 
     def SendData_Fan(self, dst, speed=None, OnOff=None, timer=None, swing=None, mode=None):
-        if speed and speed <= 24:
-            msg = self.Re_try_WriteCMD(
-                'AT+MDTS 0 0x87F000{}{}04040007{:02X}'.format(self.mac_addr, dst, speed))
-        if timer and timer <= 8:
-            msg = self.Re_try_WriteCMD(
-                'AT+MDTS 0 0x87F000{}{}04040006{:02X}'.format(self.mac_addr, dst, timer))
-        if swing in (0, 1, True, False):
-            msg = self.Re_try_WriteCMD(
-                'AT+MDTS 0 0x87F000{}{}04040005{:02X}'.format(self.mac_addr, dst, swing))
-        if mode:
-            msg = self.Re_try_WriteCMD(
-                'AT+MDTS 0 0x87F000{}{}04040005{:02X}'.format(self.mac_addr, dst, swing))
-        if OnOff in (0, 1, True, False):
-            msg = self.Re_try_WriteCMD(
-                'AT+MDTS 0 0x87F000{}{}04040001{:02X}'.format(self.mac_addr, dst, OnOff))
+        """
+        使用查表法去建立傳送的資料與限制
+        """
+        commands = {
+            'speed': (speed, 24, '04040007'),
+            'timer': (timer, 8, '04040006'),
+            'swing': (swing, None, '04040005'),
+            'mode': (mode, None, '04040005'),
+            'OnOff': (OnOff, None, '04040001')
+        }
+        for key, value in commands.items():
+            if value[0] is not None:
+                if value[1] is not None:
+                    if value[0] > value[1]:
+                        continue
+                msg = self.Re_try_WriteCMD(
+                    'AT+MDTS 0 0x87F000{}{}{}{:02X}'.format(self.mac_addr, dst, value[2], value[0]))
 
     def SendData_EPY(self, dst, send_msg):
         if len(send_msg) > 14:
@@ -123,15 +135,24 @@ if __name__ == '__main__':
         uart.deinit()
         uart = UART(0, 115200, timeout=20)
     MD = MeshDevice(uart)
-    MD.SendData_Light('C001', 0, 0, 255, 255, 0)
-    MD.SendData_Switch('C002', 1)  # Off
-    MD.SendData_Fan('C007', OnOff=1, swing=1, speed=3, timer=2)
+    # MD.SendData_Light('C001', 0, 0, 255, 255, 0)
+    # MD.SendData_Switch('C002', 1)  # Off
+    # MD.SendData_Fan('C007', OnOff=1, swing=1, speed=3, timer=2)
     MD.SendData_EPY('C005', "I am ePy01")
 
     while True:
-        for i in range(0, 255):
+        for i in range(0, 256, 32):
             MD.SendData_Light('C001', 0, 0, 0, i, 0)
-            sleep_ms(1000)
+            sleep_ms(500)
+        for i in range(0, 256, 32):
+            MD.SendData_Light('C001', 0, 0, i, 0, 0)
+            sleep_ms(500)
+        for i in range(0, 256, 32):
+            MD.SendData_Light('C001', 0, 0, 0, 0, i)
+            sleep_ms(500)
+        for i in range(0, 256, 32):
+            MD.SendData_Light('C001', 0, 0, i, 0, i)
+            sleep_ms(500)
 
     # while True:
     #     source,msg = MD.ReadMeshMsg()

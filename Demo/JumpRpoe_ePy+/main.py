@@ -72,7 +72,9 @@ while True:
             if _debug:
                 print('BLE_recv=>', recv_msg)
             recv_msg = recv_msg.split(',')
-            if recv_msg[1] == 'conn st':
+            if recv_msg[1] == 'Status':
+                sendData = 'Connecting\n'
+                BLE.SendData(sendData)
                 pass
             elif recv_msg[1] == 'get cycle':
                 sendData = 'send,{}\n'.format(0)
