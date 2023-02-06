@@ -137,10 +137,10 @@ class SmartHome():
     async def action_task(self):
         global event_q
         # play my home song satrt
-        # music.play(['C4:2', 'D', 'E:6', 'F:2', 'F:4', 'G', 'G',
-        #            'R', 'E', 'G', 'F:6', 'E:2', 'F:4', 'D', 'E'])
-        # await asyncio.sleep(8)
-        # gc.collect()
+        music.play(['C4:2', 'D', 'E:6', 'F:2', 'F:4', 'G', 'G',
+                   'R', 'E', 'G', 'F:6', 'E:2', 'F:4', 'D', 'E'])
+        await asyncio.sleep(8)
+        gc.collect()
 
         while True:
             if event_q:

@@ -59,7 +59,7 @@ class GATT:
         self.FilterName = 'rl'
         self.ble = uart
         self.ble.deinit()
-        self.ble.init(115200, timeout=20, read_buf_len=64)
+        self.ble.init(115200, timeout=100, read_buf_len=1024)
         self._init_RL62M()
         self.ChangeRole(role)
 
@@ -188,7 +188,6 @@ class GATT:
             self.ChangeMode('DATA')
             return
 
-# rewrite the function for readline
     def ScanConnect(self, mac='', name_header='EPY_', filter_rssi=60):
         device = []
         if self.ROLE != 'CENTRAL':
