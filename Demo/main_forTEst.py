@@ -19,7 +19,7 @@ def tim_cb(tim):
     Count_JumpRope += 1
 
 
-# t.callback(tim_cb)
+t.callback(tim_cb)
 
 
 def CorrectionAcc():
@@ -85,10 +85,7 @@ while True:
                 print('BLE_recv=>', recv_msg)
             recv_msg = recv_msg.split(',')
             if recv_msg[1] == 'conn st':
-                sendData = 'Connecting\n'
-                Count_JumpRope = Count_P = Count_N = speed = 0
-                BLE.SendData(sendData)
-
+                pass
             elif recv_msg[1] == 'get cycle':
                 sendData = 'send,{}\n'.format(0)
                 BLE.SendData(sendData)

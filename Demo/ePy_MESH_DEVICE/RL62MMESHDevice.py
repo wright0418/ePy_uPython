@@ -94,7 +94,7 @@ class MeshDevice:
             'speed': (speed, 24, '04040007'),
             'timer': (timer, 8, '04040006'),
             'swing': (swing, None, '04040005'),
-            'mode': (mode, None, '04040005'),
+            'mode': (mode, None, '04040003'),
             'OnOff': (OnOff, None, '04040001')
         }
         for key, value in commands.items():

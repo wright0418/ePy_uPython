@@ -55,13 +55,17 @@ def BleAdv_Recv(group='1', mac_addr='7002000005C9'):
     msg = str(uart.readline(), 'utf-8')
     if msg:
         if ('ADV_DATA ' + mac_addr) in msg and len(msg) == 76:
+
             recv_data = msg.strip().split(' ')[3][8:]
             gp = int(group)-1
             group_data = recv_data[gp*2:gp*2+2]
             if group_data.isdigit:
                 uart.write('AT+ADV_DATA_SCAN=0\r\n')
                 uart.readline()
-                return (chr(int(group_data, 16)))
+                try:
+                    return (chr(int(group_data, 16)))
+                except:
+                    pass
     uart.write('AT+ADV_DATA_SCAN=0\r\n')
     uart.readline()
 
@@ -79,7 +83,8 @@ pre_state = 0
 new_state = 0
 file_list = ['epy.txt', 'gmail.txt', 'python.txt', 'cloudy.txt']
 
-recv_mac = '7002000005C9'
+# recv_mac = '7002000005C9'
+recv_mac = '700200000339'
 while True:
     ble_data = BleAdv_Recv(group='1', mac_addr=recv_mac)
     if ble_data:
@@ -87,8 +92,8 @@ while True:
             ble_data = int(ble_data)
             if pre_state != ble_data:
                 pre_state = ble_data
-                # print(ble_data)
-                utime.sleep(0.05)  # 讓自動整理一下記憶體 (BleAdv_Recv使用了許多記憶體)
+                print(ble_data)
+                # utime.sleep(0.05)  # 讓自動整理一下記憶體 (BleAdv_Recv使用了許多記憶體)
                 # if 4 >= ble_data >= 1:
                 #     # show_led_from_file(ble_data)
                 #     g.on()

@@ -4,10 +4,9 @@ from machine import Pin, I2C, LED, Timer, UART
 from ePy4Digit import FourDigit
 from htu21d import HTU21D
 from scales import Scales
-# import RL62M
+import RL62M
 import uos as os
 import ujson
-import gc
 
 
 timer = Timer(0)
@@ -38,103 +37,53 @@ class DigitalClock:
         disp(self.hr, self.min)
 
 
-def save_config():
-    global set_info
-    with open('set_info.ini', 'w') as f:
-        ujson.dump(set_info, f)
-    # print('Write Done')
-
-
-def ble_init_device():
-    ble1.write('!CCMD@')
-    sleep_ms(200)
-    ble1.readline()
-    ble1.write('AT+MODE_DATA\r\n')
-    sleep_ms(1000)
-    ble1.readline()
-    ble1.read(ble1.any())  # clear buffer
-
-
-set_cmd_list = ['setDT', 'setBody', 'setAge', 'setAmount']
-
-
-def process_ble_data(ble_data):
-    if ble_data == '':
+def Ble_task():
+    global walter_amount, set_info, temperature, acc_walter_weight
+    BLEData = BLE.RecvData()
+    if BLE.state != 'CONNECTED' or BLEData == '':
         return
-    data = ble_data.split(',')
-    if len(data) < 2:
-        return
-    command = data[0]
-    # set command
-
-    if command in set_cmd_list:
-        if command == 'setDT' and len(data) == 8:
+    data = BLEData.split(',')
+    # print(data)
+    # set dateTime
+    try:
+        if data[0] == 'setDT' and len(data) == 8:
             now = [int(x) for x in data[1:]]
             now.append(0)
             rtc.datetime(tuple(now))
             set_info['datetime'] = rtc.datetime()
-            send_data = 'setDT,1'
-            ble_SendData(send_data)
-
-        elif command == 'setBody' and data[1].isdigit():
+            with open('set_info.ini', 'w') as f:
+                ujson.dump(set_info, f)
+        if data[0] == 'setBody' and data[1].isdigit:
             set_info['body_weight'] = int(data[1])
-            send_data = 'setBody,1'
-            ble_SendData(send_data)
+            with open('set_info.ini', 'w') as f:
+                ujson.dump(set_info, f)
+            #print('setboday', int(data[1]))
 
-        elif command == 'setAge' and data[1].isdigit():
-            set_info['age'] = int(data[1])
-            send_data = 'setAge,1'
-            ble_SendData(send_data)
-
-        elif command == 'setAmount' and data[1].isdigit():
+        if data[0] == 'setAmount' and data[1].isdigit:
             set_info['walter_amount'] = int(data[1])
-            send_data = 'setAmount,1'
-            ble_SendData(send_data)
-        save_config()
+            with open('set_info.ini', 'w') as f:
+                ujson.dump(set_info, f)
+            #print('walter_amount', int(data[1]))
 
-    # get Command
-    if command == 'getConnState':
-        send_data = 'Connected,1'
-        ble_SendData(send_data)
-    elif command == 'getCupWeight':
-        send_data = 'CupWeight,' + str(now_weight)
-        ble_SendData(send_data)
-    elif command == 'getDT':
-        dt = rtc.datetime()
-        send_data = 'DT,' + str(dt)
-        ble_SendData(send_data)
-    elif command == 'getTemper':
-        send_data = 'Temper,' + str(temperature)
-        ble_SendData(send_data)
-    elif command == 'getAccWalter':
-        send_data = 'AccWalter,' + str(acc_walter_weight)
-        ble_SendData(send_data)
-
-
-def ble_RecvData():
-    if ble1.any():
-        msg = ble1.readline()
-        _ = ble1.read(ble1.any())
-        return (str(msg, 'utf-8'))
-
-
-def ble_SendData(data):
-    _ = ble1.write(data)
-    sleep_ms(1)
-
-
-def Ble_task():
-    ble_data = ble_RecvData()
-
-    if ble_data:
-        try:
-            process_ble_data(ble_data)
-        except:
-            return
+        if data[0] == 'getDT':
+            dt = rtc.datetime()
+            sendData = 'DT,' + str(dt)
+            BLE.SendData(sendData)
+            sleep_us(10)
+        if data[0] == 'getTemper':
+            sendData = 'Temper,' + str(temperature)
+            BLE.SendData(sendData)
+            sleep_us(10)
+        if data[0] == 'getAccWalter':
+            sendData = 'AccWalter,' + str(acc_walter_weight)
+            BLE.SendData(sendData)
+            sleep_us(10)
+    except:
+        return
 
 
 set_info = {'datetime': (2023, 1, 24, 2, 12, 0, 0, 0),
-            'walter_amount': 100, 'time_threshold': 60, 'body_weight': 20, 'age': 20}
+            'walter_amount': 100, 'time_threshold': 60, 'body_weight': 20}
 
 
 def create_info_file():
@@ -143,17 +92,16 @@ def create_info_file():
         with open('set_info.ini', 'r') as f:
             set_info = ujson.load(f)
     except:
-        save_config()
+        with open('set_info.ini', 'w') as f:
+            ujson.dump(set_info, f)
 
 
 create_info_file()
-
 rtc = RTC()
 rtc.datetime(set_info['datetime'])  # set a time for start RTC
 
-ble1 = UART(1, 115200, timeout=20, read_buf_len=512)
-
-# BLE = RL62M.GATT(ble1)
+ble1 = UART(1, 115200, timeout=20, read_buf_len=64)
+BLE = RL62M.GATT(ble1)
 i2c0 = I2C(0, I2C.MASTER, baudrate=400000)
 sensor = HTU21D(i2c0)
 disp4 = FourDigit(I2C(1, I2C.MASTER, baudrate=100000))
@@ -172,22 +120,22 @@ acc_walter_weight = 0
 walter_amount = set_info['walter_amount']  # 100 cc
 time_threshold = set_info['time_threshold']*60  # 60 second
 body_weight = set_info['body_weight']  # Kg
+
 weight = scales.stable_value()//1000
 Clock.show_clock(disp4.show_time)
-
-ble_init_device()
-
+# print('Start')
 while True:
     Ble_task()
-    gc.collect()
     now_time = time()
+
     temperature = sensor.readTemperatureData()
+
     walter_amount = walter_amount + int(temperature)
     now_weight = scales.stable_value()//1000
     if now_weight > 0:
         if weight != now_weight:
             disp4.show4number(now_weight)
-            # print(now_weight, now_time)
+            print(now_weight, now_time)
             if now_weight < weight:
                 record_data = "{}:{}:{} -- drink walter weight:{} g".format(
                     Clock.hr, Clock.min, Clock.sec, weight-now_weight)
@@ -202,9 +150,9 @@ while True:
                     _ = f.write(record_data+'\r\n')
                 # print(record_data)
             weight = now_weight
-            update_walter_weight_time = now_time
+            update_walter__weight_time = now_time
 
-            if (now_time - update_walter_weight_time) > time_threshold:
+            if (now_time - update_walter__weight_time) > time_threshold:
                 #print('Over Time--')
                 playFreq(1000, 200)
                 if acc_walter_weight < walter_amount:
@@ -215,5 +163,4 @@ while True:
         Clock.show_clock(disp4.show_time)
     elif (now_time % 10) == 0:
         disp4.show_temper(temperature)
-
     sleep_ms(1)

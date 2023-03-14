@@ -58,25 +58,26 @@ pre_key = None
 
 show_no = 0
 
-sendData ="AT+ADVERT=0\r\n" 
+# 關閉廣播功能
+sendData = "AT+ADVERT=0\r\n"
 _ = uart.write(sendData)
 r = uart.readline()
 
-
-sendData ="AT+ADV_INTERVAL=50\r\n" 
+# 設定廣播 間隔  50ms 最小
+sendData = "AT+ADV_INTERVAL=50\r\n"
 _ = uart.write(sendData)
 r = uart.readline()
 
-
-sendData ="AT+ADVERT=1\r\n" 
+# 開啟廣播功能
+sendData = "AT+ADVERT=1\r\n"
 _ = uart.write(sendData)
 r = uart.readline()
 
 
 while True:
-    for key in range(1, 5):
+    for key in range(1, 10):
         sendAdvData(key)
-        time.sleep(0.5)
+        time.sleep(0.2)
 
     # if now_key != pre_key:
     #     sendAdvData(now_key)
